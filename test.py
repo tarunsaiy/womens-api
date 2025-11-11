@@ -14,8 +14,13 @@ def encrypt_password(plaintext, key, iv):
     encrypted_base64 = base64.b64encode(encrypted_bytes).decode('utf-8')
     return encrypted_base64
 
+
 def fetch_attendance(student_id, password):
-    login_url = "https://webprosindia.com/vignanit/default.aspx"
+
+    # ✅ ONLY URL CHANGED (BOYS → GIRLS)
+    base = "https://webprosindia.com/vignanvskp"
+
+    login_url = f"{base}/default.aspx"
     session = requests.Session()
 
     login_page = session.get(login_url)
@@ -25,9 +30,8 @@ def fetch_attendance(student_id, password):
     viewstate_generator = soup.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
     event_validation = soup.find("input", {"name": "__EVENTVALIDATION"})["value"]
 
-    # Encrypt the password (like in encryptJSText function in JS)
-    key = "8701661282118308"  # Same key as used in JS
-    iv = "8701661282118308"   # Same IV as used in JS
+    key = "8701661282118308"
+    iv = "8701661282118308"
     encrypted_password = encrypt_password(password, key, iv)
 
     data = {
@@ -52,14 +56,16 @@ def fetch_attendance(student_id, password):
     cookies = session.cookies.get_dict()
     frm_auth = cookies.get("frmAuth")
     session_id = cookies.get("ASP.NET_SessionId")
-    
+
     if not (frm_auth and session_id):
         return {"error": "Failed to retrieve login cookies"}
 
-    attendance_url = "https://webprosindia.com/vignanit/Academics/studentacadamicregister.aspx"
+    # ✅ ONLY URL CHANGED (attendance page)
+    attendance_url = f"{base}/Academics/studentacadamicregister.aspx"
+
     attendance_headers = {
         'cookie': f'ASP.NET_SessionId={session_id}; frmAuth={frm_auth}',
-        'referer': 'https://webprosindia.com/vignanit/StudentMaster.aspx',
+        'referer': f'{base}/StudentMaster.aspx',
         'user-agent': 'Mozilla/5.0'
     }
 
@@ -70,6 +76,7 @@ def fetch_attendance(student_id, password):
     soup = BeautifulSoup(attendance_response.text, "html.parser")
     attendance_table = soup.select_one('#tblReport table')
     data = []
+
     for row in attendance_table.find_all('tr'):
         row_data = [cell.text.strip() for cell in row.find_all('td')]
         data.append(row_data)
@@ -90,23 +97,22 @@ def fetch_attendance(student_id, password):
         attended_held = row[-2]
         percentage = row[-1]
 
-
         if attended_held != '0/0':
             subjectwise_summary.append({
-            "subject_name": subject_name,
-            "attended_held": attended_held,
-            "percentage": percentage
+                "subject_name": subject_name,
+                "attended_held": attended_held,
+                "percentage": percentage
             })
 
         if today in cleaned_data[0]:
             today_index = cleaned_data[0].index(today)
             attendance_today = row[today_index]
-            
+
             if attendance_today != '-':
                 attendance_posted = True
                 attendance_summary.append({
-                "subject": subject_name,
-                "attendance_today": attendance_today
+                    "subject": subject_name,
+                    "attendance_today": attendance_today
                 })
 
     if not attendance_posted:
@@ -114,11 +120,9 @@ def fetch_attendance(student_id, password):
             "message": f"Today {today} attendance is not posted."
         })
 
-   
-
-    base = "https://webprosindia.com/vignanit"
+    # ✅ ONLY PROFILE URL CHANGED
     profile_url = f"{base}/ajax/StudentProfile,App_Web_studentprofile.aspx.a2a1b31c.ashx"
-    
+
     profile_headers = {
         'Cookie': f'ASP.NET_SessionId={session_id}; frmAuth={frm_auth}',
         'Referer': f'{base}/Academics/StudentProfile.aspx?scrid=17',
@@ -127,45 +131,42 @@ def fetch_attendance(student_id, password):
         'Origin': 'https://webprosindia.com',
         'X-Requested-With': 'XMLHttpRequest'
     }
-    
+
     post_data = f"RollNo={student_id}\nisImageDisplay=false"
-    
+
     profile_resp = session.post(
-        profile_url, 
-        params={'_method': 'ShowStudentProfileNew', '_session': 'rw'}, 
-        headers=profile_headers, 
-        data=post_data, 
+        profile_url,
+        params={'_method': 'ShowStudentProfileNew', '_session': 'rw'},
+        headers=profile_headers,
+        data=post_data,
         timeout=10
     )
     profile_resp.raise_for_status()
 
-    # Parse HTML response to extract total attendance data
     html = profile_resp.text.replace("\\'", "'")
     prof_soup = BeautifulSoup(html, 'html.parser')
-    
-    # Find the attendance table and extract totals
+
     attendance_table = prof_soup.find('table', class_='cellBorder')
     present_total_held = present_total_attend = None
-    
+
     if attendance_table:
-        # Find TOTAL row (row with reportHeading2WithBackground class containing 'TOTAL')
         total_row = None
         for row in attendance_table.find_all('tr'):
             if 'reportHeading2WithBackground' in row.get('class', []) and 'TOTAL' in row.get_text():
                 total_row = row
                 break
-        
+
         if total_row:
             cells = total_row.find_all('td')
             if len(cells) >= 3:
-                present_total_held = int(cells[1].get_text(strip=True))    # Total held classes  
-                present_total_attend = int(cells[2].get_text(strip=True))  # Total attended classes
-    
-    # Calculate totals and percentage
+                present_total_held = int(cells[1].get_text(strip=True))
+                present_total_attend = int(cells[2].get_text(strip=True))
+
     total_attended = present_total_attend
     total_held = present_total_held
+
     if total_held > 0:
-        total_percentage = round(total_attended / total_held * 100, 2)  
+        total_percentage = round(total_attended / total_held * 100, 2)
     else:
         total_percentage = 0
 
@@ -182,7 +183,7 @@ def fetch_attendance(student_id, password):
         else:
             hours_can_skip = (total_attended - 0.75 * total_held) / 0.75
             total_info["hours_can_skip"] = int(hours_can_skip)
-    
+
     result = {
         "roll_number": roll_number,
         "attendance_summary": attendance_summary,
@@ -191,13 +192,3 @@ def fetch_attendance(student_id, password):
     }
 
     return json.dumps(result, indent=4)
-
-
-# Example usage
-
-student_id=""
-student_pw=""
-
-#result
-combined_result = fetch_attendance(student_id, student_pw)
-print(combined_result)
