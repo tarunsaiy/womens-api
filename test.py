@@ -16,11 +16,7 @@ def encrypt_password(plaintext, key, iv):
 
 
 def fetch_attendance(student_id, password):
-
-    # ✅ ONLY URL CHANGED (BOYS → GIRLS)
-    base = "https://webprosindia.com/vignanvskp"
-
-    login_url = f"{base}/default.aspx"
+    login_url = "https://webprosindia.com/vignanvskp/default.aspx"
     session = requests.Session()
 
     login_page = session.get(login_url)
@@ -30,8 +26,9 @@ def fetch_attendance(student_id, password):
     viewstate_generator = soup.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
     event_validation = soup.find("input", {"name": "__EVENTVALIDATION"})["value"]
 
-    key = "8701661282118308"
-    iv = "8701661282118308"
+    # Encrypt the password (like in encryptJSText function in JS)
+    key = "8701661282118308"  # Same key as used in JS
+    iv = "8701661282118308"  # Same IV as used in JS
     encrypted_password = encrypt_password(password, key, iv)
 
     data = {
@@ -60,12 +57,10 @@ def fetch_attendance(student_id, password):
     if not (frm_auth and session_id):
         return {"error": "Failed to retrieve login cookies"}
 
-    # ✅ ONLY URL CHANGED (attendance page)
-    attendance_url = f"{base}/Academics/studentacadamicregister.aspx"
-
+    attendance_url = "https://webprosindia.com/vignanvskp/Academics/studentacadamicregister.aspx"
     attendance_headers = {
         'cookie': f'ASP.NET_SessionId={session_id}; frmAuth={frm_auth}',
-        'referer': f'{base}/StudentMaster.aspx',
+        'referer': 'https://webprosindia.com/vignanvskp/StudentMaster.aspx',
         'user-agent': 'Mozilla/5.0'
     }
 
@@ -76,7 +71,6 @@ def fetch_attendance(student_id, password):
     soup = BeautifulSoup(attendance_response.text, "html.parser")
     attendance_table = soup.select_one('#tblReport table')
     data = []
-
     for row in attendance_table.find_all('tr'):
         row_data = [cell.text.strip() for cell in row.find_all('td')]
         data.append(row_data)
@@ -120,7 +114,7 @@ def fetch_attendance(student_id, password):
             "message": f"Today {today} attendance is not posted."
         })
 
-    # ✅ ONLY PROFILE URL CHANGED
+    base = "https://webprosindia.com/vignanvskp"
     profile_url = f"{base}/ajax/StudentProfile,App_Web_studentprofile.aspx.a2a1b31c.ashx"
 
     profile_headers = {
@@ -143,13 +137,16 @@ def fetch_attendance(student_id, password):
     )
     profile_resp.raise_for_status()
 
+    # Parse HTML response to extract total attendance data
     html = profile_resp.text.replace("\\'", "'")
     prof_soup = BeautifulSoup(html, 'html.parser')
 
+    # Find the attendance table and extract totals
     attendance_table = prof_soup.find('table', class_='cellBorder')
     present_total_held = present_total_attend = None
 
     if attendance_table:
+        # Find TOTAL row (row with reportHeading2WithBackground class containing 'TOTAL')
         total_row = None
         for row in attendance_table.find_all('tr'):
             if 'reportHeading2WithBackground' in row.get('class', []) and 'TOTAL' in row.get_text():
@@ -159,12 +156,12 @@ def fetch_attendance(student_id, password):
         if total_row:
             cells = total_row.find_all('td')
             if len(cells) >= 3:
-                present_total_held = int(cells[1].get_text(strip=True))
-                present_total_attend = int(cells[2].get_text(strip=True))
+                present_total_held = int(cells[1].get_text(strip=True))  # Total held classes
+                present_total_attend = int(cells[2].get_text(strip=True))  # Total attended classes
 
+    # Calculate totals and percentage
     total_attended = present_total_attend
     total_held = present_total_held
-
     if total_held > 0:
         total_percentage = round(total_attended / total_held * 100, 2)
     else:
@@ -192,3 +189,13 @@ def fetch_attendance(student_id, password):
     }
 
     return json.dumps(result, indent=4)
+
+
+# Example usage
+
+student_id = ""
+student_pw = ""
+
+# result
+combined_result = fetch_attendance(student_id, student_pw)
+print(combined_result)
