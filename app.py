@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
 import json
 from test import fetch_attendance
-
+from flask_cors import CORS
 app = Flask(__name__)
-
+CORS(app)
 @app.route('/attendance', methods=['GET'])
 def get_attendance():
     student_id = request.args.get('student_id')
